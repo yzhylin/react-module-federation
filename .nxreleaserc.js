@@ -1,4 +1,4 @@
-{
+module.exports = {
   "changelog": true,
   "npm": false,
   "github": true,
@@ -6,6 +6,8 @@
   "branches": [
     "main"
   ],
+  tagFormat: "${PROJECT_NAME}/v${VERSION}",
+  commitMessage: "chore(release): 🚀 release ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}",
   "plugins": [
     "semantic-release-unsquash"
   ]
