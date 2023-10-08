@@ -1,7 +1,8 @@
 import { writeFileSync } from 'fs'
 import { ReleaseExecutorSchema } from './schema';
-import {ExecutorContext, ProjectConfiguration} from '@nx/devkit';
-
+import { ExecutorContext, ProjectConfiguration } from '@nx/devkit';
+import { calculateFileChanges } from 'nx/src/project-graph/file-utils';
+import { filterAffected } from 'nx/src/project-graph/affected/affected-project-graph';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 const execa = promisify(exec);
@@ -9,9 +10,15 @@ const execa = promisify(exec);
 const file = 'CHANGELOG.md'
 
 export default async function runExecutor(options: ReleaseExecutorSchema, context: ExecutorContext) {
-  const { workspace, root} = context;
+  const { workspace, root, projectGraph} = context;
 
-  for (const name in  workspace.projects) {
+  const sha = await git.getLastCommit();
+  const touchedFiles = await git.getTouchedFiles(sha);
+  const message = await git.getCommitMessage(sha)
+  const fileChanges = calculateFileChanges(touchedFiles, []);
+  const affectedGraph = await filterAffected(projectGraph, fileChanges);
+
+  for (const name in affectedGraph.nodes) {
     const config: ProjectConfiguration = workspace.projects[name]
 
     if (config.projectType !== 'application') {
@@ -19,12 +26,12 @@ export default async function runExecutor(options: ReleaseExecutorSchema, contex
     }
 
     const path = `${root}/${config.root}`;
-    const releaseNotes = createReleaseNotes();
+    const releaseNotes = createReleaseNotes({ message });
 
     writeFileSync(`${path}/${file}`, releaseNotes, { flag: 'a'})
   }
 
-  await execa(`git add . && git commit -m 'chore(release): 1.35.1 [skip ci]'`)
+  await execa(`git add . && git commit -m 'chore(release): new version [skip ci]'`)
   await execa(`git push`)
 
   return {
@@ -42,19 +49,17 @@ const createReleaseDate = () => {
   }
 }
 
-function createReleaseNotes() {
+function createReleaseNotes({ message }: { message: string }) {
   const { year, month, date} = createReleaseDate()
 
   return `
-## [1.10.1](https://github.com/mckesson/b2b-connect-ordering-idb-idb-bff/compare/v1.35.0...v1.35.1) (${year}-${month}-${date})
+## [0.1.0](https://github.com/path/to/compare/v1.35.0...v1.35.1) (${year}-${month}-${date})
 
 ---
 
 ### Features
 
-* **[XYZ-0000]** commit message goes here
-* **[XYZ-0000]** commit message goes here
-* **[XYZ-0000]** commit message goes here
+* ${message}
 
 
 ### Bug Fixes
@@ -65,5 +70,25 @@ function createReleaseNotes() {
 
 
 
-  `.trimStart();
+  `;
+}
+
+const git = {
+  async getLastCommit():  Promise<string> {
+    const { stdout: sha } = await execa('git rev-parse HEAD');
+
+    return sha
+  },
+
+  async getTouchedFiles(sha: string): Promise<string[]> {
+    const { stdout: filenames } = await execa(`git show --pretty="" --name-only ${sha}`);
+
+    return filenames.split('\n').filter(Boolean);
+  },
+
+  async getCommitMessage(sha: string): Promise<string> {
+    const { stdout: message } = await execa(`git show -s --format=%B ${sha}`);
+
+    return message;
+  }
 }
