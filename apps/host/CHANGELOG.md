@@ -40,3 +40,17 @@
 
 
   
+## [0.1.0](https://github.com/path/to/compare/v1.35.0...v1.35.1) (2023-09-08)
+
+---
+
+### Features
+
+* feat(plugin): check affected (#16)
+
+
+
+
+
+
+  
