@@ -31,7 +31,7 @@ export default async function runExecutor(options: ReleaseExecutorSchema, contex
     writeFileSync(`${path}/${file}`, releaseNotes, { flag: 'a'})
   }
 
-  await execa(`git add . && git commit -m 'chore(release): 1.35.1 [skip ci]'`)
+  await execa(`git add . && git commit -m 'chore(release): new version [skip ci]'`)
   await execa(`git push`)
 
   return {
