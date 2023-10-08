@@ -1,16 +1,18 @@
-import { writeFileSync } from 'fs'
+import { writeFileSync, existsSync, readFileSync } from 'fs'
 import { ReleaseExecutorSchema } from './schema';
 import { ExecutorContext, ProjectConfiguration } from '@nx/devkit';
 import { calculateFileChanges } from 'nx/src/project-graph/file-utils';
 import { filterAffected } from 'nx/src/project-graph/affected/affected-project-graph';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { inc } from 'semver'
 const execa = promisify(exec);
 
-const file = 'CHANGELOG.md'
+const changelog = 'CHANGELOG.md';
+const packageJson = 'package.json';
 
 export default async function runExecutor(options: ReleaseExecutorSchema, context: ExecutorContext) {
-  const { workspace, root, projectGraph} = context;
+  const { workspace, root, projectGraph, projectName} = context;
 
   const sha = await git.getLastCommit();
   const touchedFiles = await git.getTouchedFiles(sha);
@@ -27,8 +29,8 @@ export default async function runExecutor(options: ReleaseExecutorSchema, contex
 
     const path = `${root}/${config.root}`;
     const releaseNotes = createReleaseNotes({ message });
-
-    writeFileSync(`${path}/${file}`, releaseNotes, { flag: 'a'})
+    writeFileSync(`${path}/${changelog}`, releaseNotes, { flag: 'a'});
+    upsertPackageJson(path, projectName);
   }
 
   await execa(`git add . && git commit -m 'chore(release): new version [skip ci]'`)
@@ -62,13 +64,6 @@ function createReleaseNotes({ message }: { message: string }) {
 * ${message}
 
 
-### Bug Fixes
-
-* **[XYZ-0000]** commit message goes here
-* **[XYZ-0000]** commit message goes here
-* **[XYZ-0000]** commit message goes here
-
-
 
   `;
 }
@@ -90,5 +85,20 @@ const git = {
     const { stdout: message } = await execa(`git show -s --format=%B ${sha}`);
 
     return message;
+  }
+}
+
+const upsertPackageJson = (basePath: string, projectName: string) => {
+  const path = `${basePath}/${packageJson}`;
+
+  if (existsSync(path)) {
+    const data = readFileSync(path);
+    const { version, ...pkg } = JSON.parse(data.toString());
+
+    writeFileSync(path, JSON.stringify({ ...pkg, version: inc(version, "minor") }, null, 2), 'utf8');
+  } else {
+    const defaultPackageJson = JSON.stringify({ name: projectName, version: '1.0.0' }, null, 2)
+
+    writeFileSync(path, defaultPackageJson)
   }
 }
